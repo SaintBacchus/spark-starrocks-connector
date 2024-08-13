@@ -177,8 +177,6 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
 
         numPartitions = getInt(KEY_NUM_PARTITIONS, 0);
         partitionColumns = getArray(KEY_PARTITION_COLUMNS, null);
-        supportTransactionStreamLoad = StreamLoadUtils.isStarRocksSupportTransactionLoad(
-                Arrays.asList(getFeHttpUrls()), getHttpRequestConnectTimeoutMs(), getUsername(), getPassword());
         writerMode = get(KEY_WRITER_MODE, WriteMode.STREAM_LOAD.name());
         enableRemoveDuplicatedContentLengthHeader = getBoolean(
                 KEY_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER,
@@ -187,6 +185,10 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
         getShareNothingBulkLoadAutoload = getBoolean(SHARE_NOTHING_BULK_LOAD_AUTOLOAD, false);
         shareNothingBulkLoadPath = get(SHARE_NOTHING_BULK_LOAD_PATH, ".staging/bulk_load/");
         shareNothingBulkLoadTimeoutS = getInt(SHARE_NOTHING_BULK_LOAD_TIMEOUT, 3600);
+        if (notBypassWrite()) {
+            supportTransactionStreamLoad = StreamLoadUtils.isStarRocksSupportTransactionLoad(
+                    Arrays.asList(getFeHttpUrls()), getHttpRequestConnectTimeoutMs(), getUsername(), getPassword());
+        }
     }
 
     private void genStreamLoadColumns(StructType sparkSchema, StarRocksSchema starRocksSchema) {

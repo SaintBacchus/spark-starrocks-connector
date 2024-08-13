@@ -19,6 +19,8 @@
 
 package com.starrocks.connector.spark.sql;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.starrocks.connector.spark.rest.RestClientFactory;
 import com.starrocks.connector.spark.rest.TableSchemaConverter;
 import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
@@ -26,6 +28,7 @@ import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.InferSchema;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
+import com.starrocks.format.rest.ResponseContent;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.model.TablePartition;
 import com.starrocks.format.rest.model.TableSchema;
@@ -41,6 +44,8 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +59,8 @@ public class StarRocksDataSourceProvider implements RelationProvider,
     private static final Logger LOG = LoggerFactory.getLogger(StarRocksDataSourceProvider.class);
 
     private static final TableSchemaConverter SCHEMA_CONVERTER = new TableSchemaConverter();
+
+    private static final ObjectMapper JSON_PARSER = new ObjectMapper();
 
     @Override
     public BaseRelation createRelation(SQLContext sqlContext,
@@ -86,6 +93,23 @@ public class StarRocksDataSourceProvider implements RelationProvider,
     }
 
     public static StarRocksSchema getStarRocksSchema(StarRocksConfig config, TableIdentifier identifier) {
+        if (config.isGetTableSchemaByJsonConfig()) {
+            String schemaPath = config.getTableSchemaPath();
+            String partitionsPath = config.getTablePartitionsPath();
+            try {
+                TableSchema tableSchema = JSON_PARSER.readValue(new File(schemaPath),
+                        new TypeReference<ResponseContent<TableSchema>>() {}).getResult();
+                List<TablePartition> tablePartitions = JSON_PARSER.readValue(new File(partitionsPath),
+                        new TypeReference<ResponseContent<ResponseContent.PagedResult<TablePartition>>>() {})
+                        .getResult().getItems();
+
+                return SCHEMA_CONVERTER.apply(tableSchema, tablePartitions);
+            } catch (IOException e) {
+                throw new IllegalStateException(
+                        "get table schema from json for " + identifier.toFullName() + " error, " + e.getMessage(), e);
+            }
+        }
+
         try (RestClient restClient = RestClientFactory.create(config)) {
             TableSchema tableSchema = restClient.getTableSchema(
                     identifier.getCatalog(), identifier.getDatabase(), identifier.getTable());
