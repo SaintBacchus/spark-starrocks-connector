@@ -379,7 +379,7 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
                 return result;
             }
 
-            int pid = partitioner.getPartition(new DppColumns(rowContext.getKeyColumnObjects()));
+            int pid = partitioner.getPartition(new DppColumns(rowContext.getAllColumnObjects()));
             if (pid < 0) {
                 LOG.warn("invalid partition for row:" + row + ", abnormal rows num:");
                 return result;
@@ -405,6 +405,7 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
     public class RowContext {
         private List<Object> keyColumnObjects = new ArrayList<>();
         private List<Object> valueColumnObjects = new ArrayList<>();
+        private List<Object> allColumnObjects = new ArrayList<>();
 
         public RowContext() {
         }
@@ -415,6 +416,10 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
 
         public List<Object> getValueColumnObjects() {
             return valueColumnObjects;
+        }
+
+        public List<Object> getAllColumnObjects() {
+            return allColumnObjects;
         }
 
         public boolean processRow(List<String> columnNames,
@@ -442,6 +447,7 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
                 } else {
                     valueColumnObjects.add(columnObject);
                 }
+                allColumnObjects.add(columnObject);
             }
             return true;
         }
