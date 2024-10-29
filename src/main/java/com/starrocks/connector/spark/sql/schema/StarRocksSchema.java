@@ -72,6 +72,20 @@ public class StarRocksSchema implements Serializable {
         this.tableId = tableId;
     }
 
+    @Override
+    public String toString() {
+        StringBuilder res = new StringBuilder("columns: ");
+        for (StarRocksField field : columns) {
+            res.append("\n").append(field.toString());
+        }
+        res.append("key columns: ");
+        for (StarRocksField field : keyColumns) {
+            res.append("\n").append(field.toString());
+
+        }
+        return res.toString();
+    }
+
     public String getStoragePath(long tabletId) {
         return Optional.ofNullable(tabletId2StoragePathMap.get(tabletId))
                 .map(TabletInfo::getStoragePath)

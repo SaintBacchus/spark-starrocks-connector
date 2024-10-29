@@ -19,9 +19,11 @@
 
 package org.apache.spark.sql.execution.datasources.v2
 
+import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig
 import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig.EtlIndex
 import com.starrocks.connector.spark.sql.preprocessor._
 import com.starrocks.connector.spark.sql.write.StarRocksWrite
+import com.starrocks.connector.spark.util.{ConfigUtils, ExecutorResProcessor, StarRocksWriterUtils, SegmentLoadDqc}
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaPairRDD
 import org.apache.spark.rdd.RDD
@@ -58,6 +60,14 @@ case class StarRocksWriteExec(batchWrite: BatchWrite,
       }
     }
     val newRdd = processRDD(batchWrite, rdd)
+    // init some variables
+    val writeStarRocksConfig: WriteStarRocksConfig = getWriteConfig(batchWrite)
+    val isShareNothingBulkLoadEnabled = writeStarRocksConfig.isShareNothingBulkLoadEnabled
+    if (isShareNothingBulkLoadEnabled) {
+      writeStarRocksConfig.initWorkSpacePath()
+      logInfo(s"Current workspace path: ${writeStarRocksConfig.getWorkSpacePath}")
+    }
+    val executorResProcessor: ExecutorResProcessor = new ExecutorResProcessor(writeStarRocksConfig)
 
     val writerFactory = batchWrite.createBatchWriterFactory(
       PhysicalWriteInfoImpl(newRdd.getNumPartitions))
@@ -70,7 +80,6 @@ case class StarRocksWriteExec(batchWrite: BatchWrite,
 
     // Avoid object not serializable issue.
     val writeMetrics: Map[String, SQLMetric] = customMetrics
-
     try {
       sparkContext.runJob(
         newRdd,
@@ -82,9 +91,13 @@ case class StarRocksWriteExec(batchWrite: BatchWrite,
           messages(index) = commitMessage
           totalNumRowsAccumulator.add(result.numRows)
           batchWrite.onDataWriterCommit(commitMessage)
+          // collect executor result
+          executorResProcessor.collectExecRes(commitMessage)
         }
       )
-
+      // move data and create dqc file
+      executorResProcessor.mvDataToResultPath()
+      executorResProcessor.writeDqcFileToS3()
       logInfo(s"Data source write is committing, ${logMessage(batchWrite)}")
       batchWrite.commit(messages)
       logInfo(s"Data source write is committed, ${logMessage(batchWrite)}")
@@ -102,6 +115,8 @@ case class StarRocksWriteExec(batchWrite: BatchWrite,
         }
         logError(s"Data source write support is aborted, ${logMessage(batchWrite)}")
         throw cause
+    } finally {
+      cleanWhenError(writeStarRocksConfig)
     }
 
     Nil
@@ -207,6 +222,23 @@ case class StarRocksWriteExec(batchWrite: BatchWrite,
       }
     }
     ColumnName(keyColumnNames, valueColumnNames)
+  }
+
+  def cleanWhenError(config: WriteStarRocksConfig): Unit = {
+    val workSpacePath: String = config.getWorkSpacePath
+    StarRocksWriterUtils.clearS3File(workSpacePath, ConfigUtils.getConfiguration(config.getOriginOptions))
+    logInfo(s"Clean workspace path: ${workSpacePath}")
+  }
+
+  def getWriteConfig(batchWrite: BatchWrite): WriteStarRocksConfig = {
+    batchWrite match {
+      case srWrite: StarRocksWrite =>
+        srWrite.getConfig
+      case _ =>
+        val errMsg = "Not StarRocksWrite, can not get WriteStarRocksConfig"
+        logError(errMsg)
+        throw new RuntimeException(errMsg)
+    }
   }
 
   case class PartitionKeySchema(index: util.List[Integer], schema: util.List[Class[_]])

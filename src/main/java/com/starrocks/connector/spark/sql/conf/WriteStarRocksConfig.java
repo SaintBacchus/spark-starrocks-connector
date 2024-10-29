@@ -122,6 +122,9 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     private boolean getShareNothingBulkLoadAutoload = false;
     private String shareNothingBulkLoadPath = "";
     private long shareNothingBulkLoadTimeoutS = 3600;
+    // Data file write this temporary directory first,
+    // and finally mv to the shareNothingBulkLoadPath
+    private String workSpacePath = "";
 
     public WriteStarRocksConfig(Map<String, String> originOptions,
                                 StructType sparkSchema,
@@ -302,11 +305,15 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     }
 
     public String getShareNothingBulkLoadPath() {
-        if (shareNothingBulkLoadPath.endsWith("/")) {
-            return shareNothingBulkLoadPath + getAppId() + "/";
-        } else {
-            return shareNothingBulkLoadPath + "/" + getAppId() + "/";
-        }
+        return shareNothingBulkLoadPath.endsWith("/") ? shareNothingBulkLoadPath : shareNothingBulkLoadPath + "/";
+    }
+
+    public void initWorkSpacePath() {
+        workSpacePath = getShareNothingBulkLoadPath() + ".work_space/";
+    }
+
+    public String getWorkSpacePath() {
+        return workSpacePath;
     }
 
     public long getShareNothingBulkLoadTimeoutS() {
