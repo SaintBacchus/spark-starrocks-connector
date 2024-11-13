@@ -81,6 +81,11 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
             WRITE_PREFIX + "enable.remove-duplicated-content-length-header";
     private static final boolean DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER = true;
 
+    private static final String SHARE_NOTHING_BULK_LOAD_ENABLE = PREFIX + "sharenothing.bulkload.enabled";
+    private static final String SHARE_NOTHING_BULK_LOAD_AUTOLOAD = PREFIX + "sharenothing.bulkload.autoload";
+    private static final String SHARE_NOTHING_BULK_LOAD_TIMEOUT = PREFIX + "sharenothing.bulkload.timeout";
+    private static final String SHARE_NOTHING_BULK_LOAD_PATH = PREFIX + "sharenothing.bulkload.path";
+
     private String labelPrefix = "spark";
     private int waitForContinueTimeoutMs = 30000;
     // Only support to write to one table, and one thread is enough
@@ -112,6 +117,11 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
 
     private boolean enableRemoveDuplicatedContentLengthHeader
             = DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER;
+
+    private boolean shareNothingBulkLoadEnabled = false;
+    private boolean getShareNothingBulkLoadAutoload = false;
+    private String shareNothingBulkLoadPath = "";
+    private long shareNothingBulkLoadTimeoutS = 3600;
 
     public WriteStarRocksConfig(Map<String, String> originOptions,
                                 StructType sparkSchema,
@@ -177,6 +187,14 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
         enableRemoveDuplicatedContentLengthHeader = getBoolean(
                 KEY_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER,
                 DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER);
+        shareNothingBulkLoadEnabled = getBoolean(SHARE_NOTHING_BULK_LOAD_ENABLE, false);
+        getShareNothingBulkLoadAutoload = getBoolean(SHARE_NOTHING_BULK_LOAD_AUTOLOAD, false);
+        shareNothingBulkLoadPath = get(SHARE_NOTHING_BULK_LOAD_PATH, ".staging/bulk_load/");
+        shareNothingBulkLoadTimeoutS = getInt(SHARE_NOTHING_BULK_LOAD_TIMEOUT, 3600);
+        if (notBypassWrite()) {
+            supportTransactionStreamLoad = StreamLoadUtils.isStarRocksSupportTransactionLoad(
+                    Arrays.asList(getFeHttpUrls()), getHttpRequestConnectTimeoutMs(), getUsername(), getPassword());
+        }
     }
 
     private void genStreamLoadColumns(StructType sparkSchema, StarRocksSchema starRocksSchema) {
@@ -275,6 +293,30 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
 
     public boolean notStreamLoadWrite() {
         return !isStreamLoadWrite();
+    }
+
+    public String getAppId() {
+        return getOriginOptions().getOrDefault("app.id", "spark-default-app-id");
+    }
+
+    public boolean isShareNothingBulkLoadEnabled() {
+        return shareNothingBulkLoadEnabled;
+    }
+
+    public boolean isGetShareNothingBulkLoadAutoload() {
+        return shareNothingBulkLoadEnabled && getShareNothingBulkLoadAutoload;
+    }
+
+    public String getShareNothingBulkLoadPath() {
+        if (shareNothingBulkLoadPath.endsWith("/")) {
+            return shareNothingBulkLoadPath + getAppId() + "/";
+        } else {
+            return shareNothingBulkLoadPath + "/" + getAppId() + "/";
+        }
+    }
+
+    public long getShareNothingBulkLoadTimeoutS() {
+        return shareNothingBulkLoadTimeoutS;
     }
 
     public StreamLoadProperties toStreamLoadProperties() {

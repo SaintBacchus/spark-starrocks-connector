@@ -64,7 +64,8 @@ public class StarRocksSchema implements Serializable {
             for (EtlJobConfig.EtlPartition partition : etlTable.getPartitionInfo().getPartitions()) {
                 for (int i = 0; i < partition.getTabletIds().size(); i++) {
                     tabletId2StoragePathMap.put(partition.getTabletIds().get(i),
-                            new TabletInfo(partition.getStoragePath(), partition.getBackendIds().get(i)));
+                            new TabletInfo(partition.getStoragePath(), partition.getBackendIds().get(i),
+                                    partition.getMetaUrls().get(i)));
                 }
             }
         }
@@ -77,9 +78,31 @@ public class StarRocksSchema implements Serializable {
                 .orElse("");
     }
 
+    // get tablet path as {prefix/table id/partition id/index id/tablet id}
+    public String getStorageTabletPath(String prefix, long tabletId) {
+        StringBuilder sb = new StringBuilder(prefix);
+        sb.append(tableId).append("/");
+        sb.append(etlTable.getPartitionId(tabletId)).append("/");
+        sb.append(etlTable.getIndexes().get(0).getIndexId()).append("/");
+        sb.append(tabletId);
+        return sb.toString();
+    }
+
+    // get table path as {prefix/table id/}
+    public String getStorageTablePath(String prefix) {
+        StringBuilder sb = new StringBuilder(prefix);
+        sb.append(tableId).append("/");
+        return sb.toString();
+    }
+
     public long getBackendId(long tabletId) {
         Optional<TabletInfo> tabletInfo = Optional.ofNullable(tabletId2StoragePathMap.get(tabletId));
         return tabletInfo.map(TabletInfo::getBackendId).orElse(-1L);
+    }
+
+    public String getMetadataUrl(long tabletId) {
+        Optional<TabletInfo> tabletInfo = Optional.ofNullable(tabletId2StoragePathMap.get(tabletId));
+        return tabletInfo.map(TabletInfo::getMetaUrl).orElse("");
     }
 
     public List<StarRocksField> getColumns() {
@@ -109,10 +132,12 @@ public class StarRocksSchema implements Serializable {
     public class TabletInfo implements Serializable {
         private String storagePath;
         private long backendId;
+        private String metaUrl;
 
-        public TabletInfo(String storagePath, long backendId) {
+        public TabletInfo(String storagePath, long backendId, String metaUrl) {
             this.storagePath = storagePath;
             this.backendId = backendId;
+            this.metaUrl = metaUrl;
         }
 
         public String getStoragePath() {
@@ -121,6 +146,10 @@ public class StarRocksSchema implements Serializable {
 
         public long getBackendId() {
             return backendId;
+        }
+
+        public String getMetaUrl() {
+            return metaUrl;
         }
     }
 

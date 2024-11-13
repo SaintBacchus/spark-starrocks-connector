@@ -19,9 +19,12 @@
 
 package com.starrocks.connector.spark.sql.write;
 
+import com.starrocks.connector.spark.exception.TransactionOperateException;
+import com.starrocks.connector.spark.rest.RestClientFactory;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.util.EnvUtils;
+import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -147,12 +150,32 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         }
     }
 
+
     private void openWriter(InternalRow internalRow) {
         int schemaSize = srSchema.getColumns().size();
         tabletId = internalRow.getLong(schemaSize);
         backendId = srSchema.getBackendId(tabletId);
-        String rootPath = srSchema.getStoragePath(tabletId);
+        String rootPath;
+        if (config.isShareNothingBulkLoadEnabled()) {
+            rootPath = srSchema.getStorageTabletPath(config.getShareNothingBulkLoadPath(), tabletId);
+        }  else {
+            rootPath = srSchema.getStoragePath(tabletId);
+        }
         Map<String, String> configMap = removePrefix(config.getOriginOptions());
+        if (config.isShareNothingBulkLoadEnabled()) {
+            configMap.put("starrocks.format.mode", "share_nothing");
+            try (RestClient restClient = RestClientFactory.create(config)) {
+                if (srSchema.getMetadataUrl(tabletId).isEmpty()) {
+                    throw new IllegalStateException("segment load for non fast schema should have meta url.");
+                }
+                String metaContext = restClient.getTabletMeta(srSchema.getMetadataUrl(tabletId));
+                configMap.put("starrocks.format.metaContext", metaContext);
+            } catch (TransactionOperateException | IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException("validate tablet " + tabletId + " error: ", e);
+            }
+        }
         srWriter = new com.starrocks.format.StarRocksWriter(
                 tabletId, txnId, arrowSchema, rootPath, configMap
         );
