@@ -20,6 +20,7 @@
 package com.starrocks.connector.spark.sql.write;
 
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
+import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
@@ -32,17 +33,34 @@ public class StarRocksWriterFactory implements DataWriterFactory, StreamingDataW
 
     private static final Logger LOG = LoggerFactory.getLogger(StarRocksWriterFactory.class);
 
-    private final StructType schema;
+    private final StructType sparkSchema;
+    private final StarRocksSchema starRocksSchema;
     private final WriteStarRocksConfig config;
 
-    public StarRocksWriterFactory(StructType schema, WriteStarRocksConfig config) {
-        this.schema = schema;
+    private final String label;
+    private final Long txnId;
+
+    public StarRocksWriterFactory(StructType sparkSchema,
+                                  StarRocksSchema starRocksSchema,
+                                  WriteStarRocksConfig config) {
+        this(sparkSchema, starRocksSchema, config, null, null);
+    }
+
+    public StarRocksWriterFactory(StructType sparkSchema,
+                                  StarRocksSchema starRocksSchema,
+                                  WriteStarRocksConfig config,
+                                  String label,
+                                  Long txnId) {
+        this.sparkSchema = sparkSchema;
         this.config = config;
+        this.starRocksSchema = starRocksSchema;
+        this.label = label;
+        this.txnId = txnId;
     }
 
     @Override
     public DataWriter<InternalRow> createWriter(int partitionId, long taskId) {
-        return createAndOpenWriter(partitionId, taskId, -1);
+        return createAndOpenWriter(partitionId, taskId, -1L);
     }
 
     @Override
@@ -50,21 +68,28 @@ public class StarRocksWriterFactory implements DataWriterFactory, StreamingDataW
         return createAndOpenWriter(partitionId, taskId, epochId);
     }
 
-    private StarRocksDataWriter createAndOpenWriter(int partitionId, long taskId, long epochId) {
-        StarRocksDataWriter writer = new StarRocksDataWriter(config, schema, partitionId, taskId, epochId);
+    private DataWriter<InternalRow> createAndOpenWriter(int partitionId, long taskId, long epochId) {
+        //TODO here can change write mode
+        StarRocksWriter writer = config.isBypassWrite() ?
+                new StarRocksBypassWriter(config, starRocksSchema, partitionId, taskId, epochId, label, txnId) :
+                new StarRocksStreamloadWriter(config, sparkSchema, partitionId, taskId, epochId);
         try {
             writer.open();
         } catch (Exception e) {
-            String errMsg = String.format("Failed to open writer for " +
-                            "partition: %s, task: %s, epoch: %s", partitionId, taskId, epochId);
+            String errMsg = String.format(
+                    "Failed to open writer for partition: %s, bypass: %s, task: %s, epoch: %s",
+                    partitionId, config.isBypassWrite(), taskId, epochId
+            );
             LOG.error("{}", errMsg, e);
+
             try {
                 writer.close();
             } catch (Exception ce) {
-                LOG.error("Failed to close writer for partition: {}, task: {}, epoch: {}", partitionId, taskId, epochId, ce);
+                LOG.error("Failed to close writer for partition: {}, bypass: {}, task: {}, epoch: {}",
+                        partitionId, config.isBypassWrite(), taskId, epochId, ce);
             }
 
-            throw new RuntimeException(errMsg, e);
+            throw new IllegalStateException(errMsg, e);
         }
         return writer;
     }

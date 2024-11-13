@@ -20,6 +20,8 @@
 package com.starrocks.connector.spark.sql.write;
 
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
+import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
+import com.starrocks.connector.spark.sql.schema.TableIdentifier;
 import org.apache.spark.sql.connector.distributions.Distribution;
 import org.apache.spark.sql.connector.distributions.Distributions;
 import org.apache.spark.sql.connector.expressions.Expression;
@@ -33,42 +35,57 @@ import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.connector.write.streaming.StreamingWrite;
 
 public class StarRocksWriteBuilder implements WriteBuilder {
-    private final LogicalWriteInfo info;
-    private final WriteStarRocksConfig config;
 
-    public StarRocksWriteBuilder(LogicalWriteInfo info, WriteStarRocksConfig config) {
-        this.info = info;
+    private final TableIdentifier identifier;
+    private final LogicalWriteInfo logicalInfo;
+    private final WriteStarRocksConfig config;
+    private final StarRocksSchema starRocksSchema;
+
+    public StarRocksWriteBuilder(TableIdentifier identifier,
+                                 LogicalWriteInfo logicalInfo,
+                                 WriteStarRocksConfig config,
+                                 StarRocksSchema starRocksSchema) {
+        this.identifier = identifier;
+        this.logicalInfo = logicalInfo;
         this.config = config;
+        this.starRocksSchema = starRocksSchema;
     }
 
     @Override
     public Write build() {
-        return new StarRocksWriteImpl(info, config);
+        return new StarRocksWriteImpl(identifier, logicalInfo, config, starRocksSchema);
     }
 
-    private static class StarRocksWriteImpl implements Write, RequiresDistributionAndOrdering {
+    public static class StarRocksWriteImpl implements Write, RequiresDistributionAndOrdering {
 
-        private final LogicalWriteInfo info;
+        private final TableIdentifier identifier;
+        private final LogicalWriteInfo logicalInfo;
         private final WriteStarRocksConfig config;
+        private final StarRocksSchema schema;
 
-        public StarRocksWriteImpl(LogicalWriteInfo info, WriteStarRocksConfig config) {
-            this.info = info;
+        public StarRocksWriteImpl(TableIdentifier identifier,
+                                  LogicalWriteInfo logicalInfo,
+                                  WriteStarRocksConfig config,
+                                  StarRocksSchema schema) {
+            this.identifier = identifier;
+            this.logicalInfo = logicalInfo;
             this.config = config;
+            this.schema = schema;
         }
 
         @Override
         public String description() {
-            return String.format("StarRocksWriteImpl[%s.%s]", config.getDatabase(), config.getTable());
+            return String.format("StarRocksWrite[%s]", identifier.toFullName());
         }
 
         @Override
         public BatchWrite toBatch() {
-            return new StarRocksWrite(info, config);
+            return new StarRocksWrite(identifier, logicalInfo, config, schema);
         }
 
         @Override
         public StreamingWrite toStreaming() {
-            return new StarRocksWrite(info, config);
+            return new StarRocksWrite(identifier, logicalInfo, config, schema);
         }
 
         @Override
@@ -85,7 +102,7 @@ public class StarRocksWriteBuilder implements WriteBuilder {
             // TODO is it possible to implement a distribution without shuffle like DataSet#coalesce
             String[] partitionColumns = config.getPartitionColumns();
             if (partitionColumns == null) {
-                partitionColumns = info.schema().names();
+                partitionColumns = logicalInfo.schema().names();
             }
 
             Expression[] expressions = new Expression[partitionColumns.length];

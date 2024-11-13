@@ -19,24 +19,17 @@
 
 package com.starrocks.connector.spark.rest.models;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class TestSchema {
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
-
     @Test
     public void testPutGet() {
         Schema ts = new Schema(1);
         Field f = new Field();
         ts.put(f);
-        Assert.assertEquals(f, ts.get(0));
-
-        thrown.expect(IndexOutOfBoundsException.class);
-        thrown.expectMessage("Index: 1, Fields size: 1");
-        ts.get(1);
+        Assertions.assertEquals(f, ts.get(0));
+        IndexOutOfBoundsException exception = Assertions.assertThrows(IndexOutOfBoundsException.class, () -> ts.get(1));
+        Assertions.assertEquals(exception.getMessage(), "Index: 1, Fields size: 1");
     }
 }

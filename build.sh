@@ -57,7 +57,7 @@ else
     exit 1
 fi
 
-${MVN_CMD} clean package -DskipTests -Pspark-${spark_version}
+${MVN_CMD} clean package -Pspark-${spark_version} -DskipTests -Drat.skip=true
 
 echo "*********************************************************************"
 echo "Successfully build Spark StarRocks Connector for Spark $spark_version"

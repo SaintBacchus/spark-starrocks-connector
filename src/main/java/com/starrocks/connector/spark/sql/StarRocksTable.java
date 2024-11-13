@@ -19,54 +19,72 @@
 
 package com.starrocks.connector.spark.sql;
 
-import com.starrocks.connector.spark.exception.StarrocksException;
+import com.starrocks.connector.spark.cfg.PropertiesSettings;
+import com.starrocks.connector.spark.exception.StarRocksException;
+import com.starrocks.connector.spark.read.StarRocksScanBuilder;
 import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
+import com.starrocks.connector.spark.sql.schema.TableIdentifier;
 import com.starrocks.connector.spark.sql.write.StarRocksWriteBuilder;
+import org.apache.spark.sql.connector.catalog.Identifier;
+import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.SupportsWrite;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableCapability;
+import org.apache.spark.sql.connector.read.ScanBuilder;
 import org.apache.spark.sql.connector.write.LogicalWriteInfo;
 import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-public class StarRocksTable implements Table, SupportsWrite {
+import static com.starrocks.connector.spark.cfg.ConfigurationOptions.STARROCKS_TABLE_IDENTIFIER;
+import static com.starrocks.connector.spark.cfg.ConfigurationOptions.makeWriteCompatibleWithRead;
 
-    private static final Set<TableCapability> TABLE_CAPABILITY_SET = Collections.unmodifiableSet(
-            new HashSet<>(
-                    Arrays.asList(
-                            TableCapability.BATCH_WRITE,
-                            TableCapability.STREAMING_WRITE
-                    )
-            )
-    );
+public class StarRocksTable implements Table, SupportsWrite, SupportsRead {
 
+    private final StarRocksConfig config;
     private final StructType schema;
     private final StarRocksSchema starRocksSchema;
-    private final StarRocksConfig config;
+    private final TableIdentifier identifier;
 
-    public StarRocksTable(StructType schema, StarRocksSchema starRocksSchema, StarRocksConfig config) {
+    public StarRocksTable(StructType schema,
+                          StarRocksSchema starRocksSchema,
+                          StarRocksConfig config,
+                          Identifier identifier) {
         this.schema = schema;
         this.starRocksSchema = starRocksSchema;
         this.config = config;
+        this.identifier = TableIdentifier.createFrom(identifier);
+    }
+
+    public StarRocksTable(StructType schema,
+                          StarRocksSchema starRocksSchema,
+                          StarRocksConfig config) {
+        this.schema = schema;
+        this.starRocksSchema = starRocksSchema;
+        this.config = config;
+        this.identifier = new TableIdentifier(config.getDatabase(), config.getTable());
     }
 
     @Override
     public WriteBuilder newWriteBuilder(LogicalWriteInfo info) {
-        WriteStarRocksConfig writeConfig = new WriteStarRocksConfig(config.getOriginOptions(), schema, starRocksSchema);
+        PropertiesSettings properties = addTableInfoForOptions(config.getOriginOptions());
+        WriteStarRocksConfig writeConfig =
+                new WriteStarRocksConfig(properties.getPropertyMap(), schema, starRocksSchema);
         checkWriteParameter(writeConfig);
-        return new StarRocksWriteBuilder(info, writeConfig);
+
+        return new StarRocksWriteBuilder(identifier, info, writeConfig, starRocksSchema);
     }
 
     @Override
     public String name() {
-        return String.format("StarRocksTable[%s.%s]", config.getDatabase(), config.getTable());
+        return identifier.toFullName();
     }
 
     @Override
@@ -81,10 +99,32 @@ public class StarRocksTable implements Table, SupportsWrite {
 
     private void checkWriteParameter(WriteStarRocksConfig config) {
         if (!starRocksSchema.isPrimaryKey() && config.isPartialUpdate()) {
-            String errMsg = String.format("Table %s.%s is not a primary key table, and not supports partial update. " +
-                    "You could create a primary key table, or remove the option 'starrocks.write.properties.partial_update'.",
-                    config.getDatabase(), config.getTable());
-            throw new StarrocksException(errMsg);
+            String errMsg = String.format(
+                    "Table %s.%s is not a primary key table, and not supports partial update. " +
+                            "You could create a primary key table, " +
+                            "or remove the option 'starrocks.write.properties.partial_update'.",
+                    identifier.getDatabase(), identifier.getTable());
+            throw new StarRocksException(errMsg);
         }
+    }
+
+    private static final Set<TableCapability> TABLE_CAPABILITY_SET = new HashSet<>(
+            Arrays.asList(TableCapability.BATCH_READ, TableCapability.BATCH_WRITE, TableCapability.STREAMING_WRITE));
+
+    @Override
+    public ScanBuilder newScanBuilder(CaseInsensitiveStringMap options) {
+        PropertiesSettings properties = addTableInfoForOptions(options.asCaseSensitiveMap());
+        return new StarRocksScanBuilder(identifier, schema, starRocksSchema, properties);
+    }
+
+    private PropertiesSettings addTableInfoForOptions(Map<String, String> options) {
+        PropertiesSettings properties = new PropertiesSettings();
+        options.forEach(properties::setProperty);
+        Map<String, String> configMap = makeWriteCompatibleWithRead(config.getOriginOptions());
+        configMap.forEach(properties::setProperty);
+        if (properties.getProperty(STARROCKS_TABLE_IDENTIFIER) == null) {
+            properties.setProperty(STARROCKS_TABLE_IDENTIFIER, identifier.toFullName());
+        }
+        return properties;
     }
 }

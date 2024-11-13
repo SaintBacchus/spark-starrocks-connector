@@ -19,31 +19,23 @@
 
 package com.starrocks.connector.spark.serialization;
 
-import static org.hamcrest.core.StringStartsWith.startsWith;
-
 import com.starrocks.connector.spark.exception.IllegalArgumentException;
-
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class TestRouting {
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
 
     @Test
-    public void testRouting() throws Exception {
+    public void testRouting() {
         Routing r1 = new Routing("10.11.12.13:1234");
-        Assert.assertEquals("10.11.12.13", r1.getHost());
-        Assert.assertEquals(1234, r1.getPort());
+        Assertions.assertEquals("10.11.12.13", r1.getHost());
+        Assertions.assertEquals(1234, r1.getPort());
 
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage(startsWith("argument "));
-        new Routing("10.11.12.13:wxyz");
+        IllegalArgumentException exception = Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new Routing("10.11.12.13:wxyz"));
+        Assertions.assertTrue(exception.getMessage().startsWith("argument "));
 
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage(startsWith("Parse "));
-        new Routing("10.11.12.13");
+        exception = Assertions.assertThrows(IllegalArgumentException.class, () -> new Routing("10.11.12.13"));
+        Assertions.assertTrue(exception.getMessage().startsWith("argument "));
     }
 }

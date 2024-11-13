@@ -47,6 +47,11 @@ public class PropertiesSettings extends Settings {
     }
 
     @Override
+    public void removeProperty(String name) {
+        props.remove(name);
+    }
+
+    @Override
     public Settings copy() {
         return new PropertiesSettings((Properties) props.clone());
     }
