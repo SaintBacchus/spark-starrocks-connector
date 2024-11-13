@@ -138,6 +138,8 @@ public class EtlJobConfig implements Serializable {
         @SerializedName(value = "fileGroups")
         private List<EtlFileGroup> fileGroups;
 
+        private Map<Long, Long> tabletPartitionIndex;
+
         public EtlTable() {
         }
 
@@ -145,6 +147,13 @@ public class EtlJobConfig implements Serializable {
             this.indexes = etlIndexes;
             this.partitionInfo = etlPartitionInfo;
             this.fileGroups = Lists.newArrayList();
+            this.tabletPartitionIndex = new HashMap<>();
+            for (EtlPartition p : partitionInfo.getPartitions())  {
+                long partitionId = p.getPartitionId();
+                for (Long tabletId : p.getTabletIds()) {
+                    tabletPartitionIndex.put(tabletId, partitionId);
+                }
+            }
         }
 
         public void addFileGroup(EtlFileGroup etlFileGroup) {
@@ -185,6 +194,10 @@ public class EtlJobConfig implements Serializable {
                         }
                     }
             );
+        }
+
+        public long getPartitionId(long tabletId) {
+            return tabletPartitionIndex.getOrDefault(tabletId, -1L);
         }
 
         @Override
@@ -493,6 +506,8 @@ public class EtlJobConfig implements Serializable {
 
         @SerializedName(value = "backendIds")
         private List<Long> backendIds;
+        @SerializedName(value = "metaUrls")
+        private List<String> metaUrls;
 
         public EtlPartition() {
         }
@@ -506,7 +521,8 @@ public class EtlJobConfig implements Serializable {
                             Integer bucketNum,
                             String storagePath,
                             List<Long> tabletIds,
-                            List<Long> backendIds) {
+                            List<Long> backendIds,
+                            List<String> metaUrls) {
             this.partitionId = partitionId;
             this.startKeys = startKeys;
             this.endKeys = endKeys;
@@ -517,6 +533,7 @@ public class EtlJobConfig implements Serializable {
             this.storagePath = storagePath;
             this.tabletIds = tabletIds;
             this.backendIds = backendIds;
+            this.metaUrls = metaUrls;
         }
 
         @Override
@@ -573,6 +590,10 @@ public class EtlJobConfig implements Serializable {
 
         public List<Long> getBackendIds() {
             return backendIds;
+        }
+
+        public List<String> getMetaUrls() {
+            return metaUrls;
         }
     }
 

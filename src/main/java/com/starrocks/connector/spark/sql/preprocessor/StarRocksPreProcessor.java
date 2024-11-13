@@ -53,13 +53,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
 import java.util.Spliterators;
 import java.util.stream.StreamSupport;
 
@@ -136,7 +134,6 @@ public final class StarRocksPreProcessor implements Serializable {
                             if (bucketKey.length != 2) {
                                 throw new IllegalStateException("Invalid bucket key: " + curBucketKey);
                             }
-
                             Long partitionId = Long.parseLong(bucketKey[0]);
                             int bucketId = Integer.parseInt(bucketKey[1]);
                             // must order by asc
@@ -384,8 +381,6 @@ public final class StarRocksPreProcessor implements Serializable {
             parsers.add(ColumnParser.create(column));
         }
 
-        Set<Integer> partitionIdx = new HashSet<>(partitionKeyIndex);
-
         // use PairFlatMapFunction instead of PairMapFunction because there will be
         // 0 or 1 output row for 1 input row
         // TODO (jkj check for flatMapToPair change to mapToPair)
@@ -393,13 +388,11 @@ public final class StarRocksPreProcessor implements Serializable {
             Tuple2<List<Object>, Object[]> result = new Tuple2<>(null, null);
 
             RowContext rowContext = new RowContext();
-            boolean validData = rowContext.processRow(
-                    keyColumnNames, row, dstTableSchema, baseIndex, parsers,
-                    true, keyColumnNames.size(), false, partitionIdx)
-                    &&
-                    rowContext.processRow(
-                            valueColumnNames, row, dstTableSchema, baseIndex, parsers,
-                            false, keyColumnNames.size(), false, partitionIdx);
+
+            boolean validData = rowContext.processRow(keyColumnNames, row, dstTableSchema, baseIndex, parsers,
+                    true, keyColumnNames.size(), false) &&
+                    rowContext.processRow(valueColumnNames, row, dstTableSchema, baseIndex, parsers, false,
+                            keyColumnNames.size(), false);
             if (!validData) {
                 return result;
             }
@@ -442,8 +435,7 @@ public final class StarRocksPreProcessor implements Serializable {
                                   List<ColumnParser> parsers,
                                   boolean isKey,
                                   int keySize,
-                                  boolean isCheckData,
-                                  Set<Integer> partitionIndexes) {
+                                  boolean isCheckData) {
             for (int i = 0; i < columnNames.size(); i++) {
                 String columnName = columnNames.get(i);
                 int idx = (int) tableSchema.getFieldIndex(columnName).get();
@@ -462,6 +454,7 @@ public final class StarRocksPreProcessor implements Serializable {
                 } else {
                     valColumns.add(columnObject);
                 }
+                allColumns.add(columnObject);
             }
             return true;
         }

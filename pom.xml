@@ -70,7 +70,7 @@
         <httpcore.version>4.4.15</httpcore.version>
         <fastjson.version>1.2.83</fastjson.version>
         <starrocks.streamload.version>1.2.9-ve-3</starrocks.streamload.version>
-        <starrocks.format.sdk.version>1.0.0.45</starrocks.format.sdk.version>
+        <starrocks.format.sdk.version>1.0.1-SNAPSHOT</starrocks.format.sdk.version>
     </properties>
 
     <profiles>

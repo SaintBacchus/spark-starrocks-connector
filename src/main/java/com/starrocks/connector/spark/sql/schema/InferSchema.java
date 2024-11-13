@@ -22,7 +22,6 @@ package com.starrocks.connector.spark.sql.schema;
 import com.starrocks.connector.spark.exception.StarRocksException;
 import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
-import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
 import com.starrocks.connector.spark.util.DataTypeUtils;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
@@ -35,15 +34,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.starrocks.connector.spark.sql.StarRocksDataSourceProvider.getStarRocksSchema;
+
 public final class InferSchema {
 
     public static StructType inferSchema(Map<String, String> options) {
         SimpleStarRocksConfig config = new SimpleStarRocksConfig(options);
-        StarRocksConnector srConnector = new StarRocksConnector(
-                config.getFeJdbcUrl(), config.getUsername(), config.getPassword());
-        StarRocksSchema starrocksSchema = srConnector.getSchema(
-                new TableIdentifier(config.getDatabase(), config.getTable()));
-        return inferSchema(starrocksSchema, config);
+        StarRocksSchema starRocksSchema = getStarRocksSchema(config);
+        return inferSchema(starRocksSchema, config);
     }
 
     public static StructType inferSchema(StarRocksSchema starRocksSchema, StarRocksConfig config) {

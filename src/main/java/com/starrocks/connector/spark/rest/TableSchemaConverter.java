@@ -206,6 +206,7 @@ public class TableSchemaConverter implements BiFunction<TableSchema, List<TableP
     private static EtlPartition toEtlPartition(TablePartition partition) {
         List<Long> tabletIds = new ArrayList<>();
         List<Long> backendIds = new ArrayList<>();
+        List<String> metaUrls = new ArrayList<>();
         List<Tablet> tablets = partition.getTablets();
         if (CollectionUtils.isNotEmpty(tablets)) {
             tabletIds.addAll(
@@ -223,6 +224,11 @@ public class TableSchemaConverter implements BiFunction<TableSchema, List<TableP
                                     }
                             ).collect(Collectors.toList())
             );
+
+            // TODO:: Seem only one replica can be used.
+            metaUrls.addAll(tablets.stream()
+                    .map(p -> p.getMetaUrls().stream().findFirst().orElse("")).collect(Collectors.toList())
+            );
         }
 
         return new EtlPartition(
@@ -235,7 +241,8 @@ public class TableSchemaConverter implements BiFunction<TableSchema, List<TableP
                 partition.getBucketNum(),
                 partition.getStoragePath(),
                 tabletIds,
-                backendIds
+                backendIds,
+                metaUrls
         );
     }
 

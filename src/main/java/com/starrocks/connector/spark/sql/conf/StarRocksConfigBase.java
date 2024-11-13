@@ -63,6 +63,9 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
 
     public static final String KEY_VERBOSE_ENABLED = PREFIX + "verbose.enabled";
 
+    public static final String KEY_TABLE_SCHEMA_PATH = PREFIX + "table.schema.path";
+    public static final String KEY_TABLE_PARTITIONS_PATH = PREFIX + "table.partitions.path";
+
     protected final Map<String, String> originOptions;
 
     private String[] feHttpUrls;
@@ -79,6 +82,14 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
     private int httpRequestConnectTimeoutMs;
     private int httpRequestSocketTimeoutMs;
     private ZoneId timeZone;
+
+    private String tableSchemaPath;
+    private String tablePartitionsPath;
+
+    // When table.schema.path and table.partitions.path are not empty,
+    // the table schema and partitions data are obtained through the json file.
+    // Therefore, there is no need to provide FE connection information
+    private boolean getTableSchemaByJsonConfig = false;
 
     public StarRocksConfigBase(Map<String, String> options) {
         this.originOptions = new HashMap<>(options);
@@ -104,6 +115,12 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
 
         String tz = get(STARROCKS_TIMEZONE);
         this.timeZone = tz == null ? ZoneId.systemDefault() : ZoneId.of(get(STARROCKS_TIMEZONE));
+
+        this.tableSchemaPath = get(KEY_TABLE_SCHEMA_PATH, "");
+        this.tablePartitionsPath = get(KEY_TABLE_PARTITIONS_PATH, "");
+        if (StringUtils.isNotBlank(tableSchemaPath) && StringUtils.isNotBlank(tablePartitionsPath)) {
+            this.getTableSchemaByJsonConfig = true;
+        }
     }
 
     @Override
@@ -176,6 +193,21 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
     @Override
     public boolean isVerbose() {
         return getBoolean(KEY_VERBOSE_ENABLED, false);
+    }
+
+    @Override
+    public String getTableSchemaPath() {
+        return tableSchemaPath;
+    }
+
+    @Override
+    public String getTablePartitionsPath() {
+        return tablePartitionsPath;
+    }
+
+    @Override
+    public boolean isGetTableSchemaByJsonConfig() {
+        return getTableSchemaByJsonConfig;
     }
 
     protected String get(final String key) {

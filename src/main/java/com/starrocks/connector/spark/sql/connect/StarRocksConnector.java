@@ -35,6 +35,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -200,6 +201,22 @@ public class StarRocksConnector implements Serializable {
         return columnValues;
     }
 
+    private void executeSql(String sqlStatement) {
+        List<Map<String, String>> columnValues = new ArrayList<>();
+        try (
+                Connection conn = createJdbcConnection();
+                Statement stmt = conn.createStatement();
+        ) {
+            stmt.execute(sqlStatement);
+            LOG.info("Success submit sql: {}", sqlStatement);
+        } catch (Exception e) {
+            if (e instanceof IllegalStateException) {
+                throw (IllegalStateException) e;
+            }
+            throw new IllegalStateException("submit sql error, " + e.getMessage(), e);
+        }
+    }
+
     private Connection createJdbcConnection() {
         try {
             Class.forName(MYSQL_80_DRIVER_NAME);
@@ -224,4 +241,25 @@ public class StarRocksConnector implements Serializable {
         }
     }
 
+    public void loadSegmentData(String db, String label, String stagingPath, String table,
+                                String ak, String sk, String endpoint) {
+        String loadSegment = String.format("LOAD LABEL %s.`%s` " +
+                "( " +
+                " DATA INFILE(\"%s\") " +
+                " INTO TABLE %s " +
+                " FORMAT AS \"starrocks\" " +
+                ") WITH BROKER (" +
+                "\"aws.s3.use_instance_profile\" = \"false\"," +
+                "\"aws.s3.access_key\" = \"%s\"," +
+                "\"aws.s3.secret_key\" = \"%s\"," +
+                "\"aws.s3.endpoint\" = \"%s\"," +
+                "\"aws.s3.enable_ssl\" = \"false\"" +
+                ");", db, label, stagingPath, table, ak, sk, endpoint);
+        executeSql(loadSegment);
+    }
+
+    public List<Map<String, String>> getSegmentLoadState(String db, String label) {
+        String loadSegment = String.format("SHOW LOAD FROM %s WHERE LABEL = \"%s\" ORDER BY CreateTime desc limit 1;", db, label);
+        return extractColumnValuesBySql(loadSegment, new ArrayList<>());
+    }
 }

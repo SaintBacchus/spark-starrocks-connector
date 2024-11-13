@@ -17,51 +17,25 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package com.starrocks.connector.spark.sql.conf;
+package com.starrocks.connector.spark.sql;
+import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
+import org.junit.jupiter.api.Test;
 
-import java.io.Serializable;
-import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
-public interface StarRocksConfig extends Serializable {
+public class StarRocksConnectorTest {
 
-    String PREFIX = "starrocks.";
+    @Test
+    public void testLoadSegmentData() {
+        StarRocksConnector srConnector = new StarRocksConnector("jdbc:mysql://127.0.0.1:9030/tpcds", "root", "");
+        srConnector.loadSegmentData("tpcds", "aa", "s3://bucket1/.staging/", "reason", "minio_access_key", "minio_secret_key", "http://127.0.0.1:9000");
+    }
 
-    Map<String, String> getOriginOptions();
-
-    String[] getFeHttpUrls();
-
-    String getFeJdbcUrl();
-
-    String getDatabase();
-
-    String getTable();
-
-    String getUsername();
-
-    String getPassword();
-
-    Integer getHttpRequestRetries();
-
-    Integer getHttpRequestConnectTimeoutMs();
-
-    Integer getHttpRequestSocketTimeoutMs();
-
-    ZoneId getTimeZone();
-
-    @Nullable
-    String[] getColumns();
-
-    @Nullable
-    String getColumnTypes();
-
-    boolean isVerbose();
-
-    String getTableSchemaPath();
-
-    String getTablePartitionsPath();
-
-    boolean isGetTableSchemaByJsonConfig();
-
+    @Test
+    public void testWaitLoadSegmentData() {
+        StarRocksConnector srConnector = new StarRocksConnector("jdbc:mysql://127.0.0.1:9030/tpcds", "root", "");
+        List<Map<String, String>> loads = srConnector.getSegmentLoadState("tpcds", "aa");
+        System.out.println(loads.toString());
+    }
 }

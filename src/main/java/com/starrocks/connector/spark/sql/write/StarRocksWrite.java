@@ -21,7 +21,9 @@ package com.starrocks.connector.spark.sql.write;
 
 import com.starrocks.connector.spark.exception.TransactionOperateException;
 import com.starrocks.connector.spark.rest.RestClientFactory;
+import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
+import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
 import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
@@ -29,11 +31,16 @@ import com.starrocks.format.StarRocksWriter;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.TransactionResult;
 import com.starrocks.format.rest.TxnOperation;
+import com.starrocks.format.rest.Validator;
+import com.starrocks.format.rest.model.TableSchema;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import com.starrocks.format.rest.model.TabletFailInfo;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
 import org.apache.spark.sql.connector.write.LogicalWriteInfo;
@@ -44,10 +51,14 @@ import org.apache.spark.sql.connector.write.streaming.StreamingWrite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -80,6 +91,19 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             return new StarRocksWriterFactory(logicalInfo.schema(), schema, config);
         }
 
+        if (config.isShareNothingBulkLoadEnabled()) {
+            try (RestClient restClient = RestClientFactory.create(config)) {
+                TableSchema tableSchema = restClient.getTableSchema(identifier.getCatalog(), identifier.getDatabase(),
+                        identifier.getTable());
+                Validator.validateSegmentLoadExport(tableSchema);
+                return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "segment_load", 1L);
+            } catch (TransactionOperateException | IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException("validate table " + identifier.toFullName() + " error: ", e);
+            }
+        }
+
         // begin transaction
         final String label = this.randomLabel(identifier);
         try (RestClient restClient = RestClientFactory.create(config)) {
@@ -110,6 +134,69 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             return;
         }
 
+        // This branch enabled bulk load and also enabled the auto load
+        if (config.isGetShareNothingBulkLoadAutoload()) {
+            SimpleStarRocksConfig cfg = new SimpleStarRocksConfig(config.getOriginOptions());
+            StarRocksConnector srConnector = new StarRocksConnector(
+                    cfg.getFeJdbcUrl(), cfg.getUsername(), cfg.getPassword());
+            String label = config.getDatabase() + "_" + UUID.randomUUID();
+            String ak = config.getOriginOptions().get("starrocks.fs.s3a.access.key");
+            String sk = config.getOriginOptions().get("starrocks.fs.s3a.secret.key");
+            String endpoint = config.getOriginOptions().get("starrocks.fs.s3a.endpoint");
+
+            srConnector.loadSegmentData(config.getDatabase(), label,
+                    config.getShareNothingBulkLoadPath(), config.getTable(), ak, sk, endpoint);
+            boolean finished = false;
+
+            try {
+                Thread.sleep(3000);
+                String state;
+                long timeout = config.getShareNothingBulkLoadTimeoutS();
+                long starTime = System.currentTimeMillis() / 1000;
+                do {
+                    List<Map<String, String>> loads = srConnector.getSegmentLoadState(config.getDatabase(), label);
+                    if (loads.isEmpty()) {
+                        LOG.error("None segment load found with label: {}", label);
+                        return;
+                    }
+                    // loads only have one row
+                    for (Map<String, String> l : loads) {
+                        state = l.get("State");
+                        if (state.equalsIgnoreCase("CANCELLED")) {
+                            finished = true;
+                            LOG.warn("Load had cancelled with error: {}", l.get("ErrorMsg"));
+                        } else if (state.equalsIgnoreCase("Finished")) {
+                            finished = true;
+                            LOG.info("Load had was finished.");
+                        } else {
+                            LOG.info("Load had not finished, try another loop with state = {}", state);
+                        }
+                    }
+                    if (!finished) {
+                        Thread.sleep(10000);
+                    }
+                } while (!finished && (System.currentTimeMillis() / 1000 - starTime) < timeout);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+
+            if (finished) {
+                LOG.info("Commit batch query success for bulk load: {}", logicalInfo.queryId());
+            } else {
+                LOG.error("Commit batch query failed with timeout:{} for bulk load: {}",
+                        config.getShareNothingBulkLoadTimeoutS(), logicalInfo.queryId());
+            }
+            cleanTheTransactionPath();
+            return;
+        }
+
+        // This branch enabled bulk load but disable the auto load
+        if (config.isShareNothingBulkLoadEnabled()) {
+            LOG.info("Commit batch query success for bulk load: {}", logicalInfo.queryId());
+            return;
+        }
+
+        // This branch below is bypass commit for share-nothing starrocks
         List<TabletCommitInfo> tabletCommitInfos = Arrays.stream(messages)
                 .map(message -> (StarRocksWriterCommitMessage) message)
                 .map(StarRocksWriterCommitMessage::getTabletCommitInfo)
@@ -182,6 +269,11 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
     public void abort(WriterCommitMessage[] messages) {
         if (config.notBypassWrite()) {
             LOG.info("Abort batch query: {}, bypass: {}", logicalInfo.queryId(), config.isBypassWrite());
+            return;
+        }
+        if (config.isShareNothingBulkLoadEnabled()) {
+            cleanTheTransactionPath();
+            LOG.info("Abort batch query for bulk load: {}", logicalInfo.queryId());
             return;
         }
 
@@ -262,5 +354,17 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
 
     public StarRocksSchema getSchema() {
         return schema;
+    }
+
+    private void cleanTheTransactionPath() {
+        try {
+            FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()), new Configuration());
+            String tablePath = schema.getStorageTablePath(config.getShareNothingBulkLoadPath());
+            LOG.info("Try to delete table path {} for this load.", tablePath);
+            fs.delete(new Path(tablePath), true);
+            LOG.info("Success delete table path {} for this load.", tablePath);
+        } catch (IOException | URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
