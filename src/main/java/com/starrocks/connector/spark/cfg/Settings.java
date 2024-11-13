@@ -32,12 +32,15 @@ import java.util.Enumeration;
 import java.util.Map;
 import java.util.Properties;
 
+
 public abstract class Settings implements Serializable {
     private static Logger logger = LoggerFactory.getLogger(Settings.class);
 
     public abstract String getProperty(String name);
 
     public abstract void setProperty(String name, String value);
+
+    public abstract void removeProperty(String name);
 
     public abstract Properties asProperties();
 
@@ -69,7 +72,7 @@ public abstract class Settings implements Serializable {
 
         Enumeration<?> propertyNames = properties.propertyNames();
 
-        for (; propertyNames.hasMoreElements(); ) {
+        while (propertyNames.hasMoreElements()) {
             Object prop = propertyNames.nextElement();
             if (prop instanceof String) {
                 Object value = properties.get(prop);

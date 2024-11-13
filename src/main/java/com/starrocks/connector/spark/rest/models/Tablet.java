@@ -23,41 +23,13 @@ import java.util.List;
 import java.util.Objects;
 
 public class Tablet {
+
     private List<String> routings;
-    private int version;
-    private long versionHash;
-    private long schemaHash;
+    private Long version;
+    private Long versionHash;
+    private Long schemaHash;
 
-    public List<String> getRoutings() {
-        return routings;
-    }
-
-    public void setRoutings(List<String> routings) {
-        this.routings = routings;
-    }
-
-    public int getVersion() {
-        return version;
-    }
-
-    public void setVersion(int version) {
-        this.version = version;
-    }
-
-    public long getVersionHash() {
-        return versionHash;
-    }
-
-    public void setVersionHash(long versionHash) {
-        this.versionHash = versionHash;
-    }
-
-    public long getSchemaHash() {
-        return schemaHash;
-    }
-
-    public void setSchemaHash(long schemaHash) {
-        this.schemaHash = schemaHash;
+    public Tablet() {
     }
 
     @Override
@@ -69,14 +41,46 @@ public class Tablet {
             return false;
         }
         Tablet tablet = (Tablet) o;
-        return version == tablet.version &&
-                versionHash == tablet.versionHash &&
-                schemaHash == tablet.schemaHash &&
-                Objects.equals(routings, tablet.routings);
+        return Objects.equals(getRoutings(), tablet.getRoutings())
+                && Objects.equals(getVersion(), tablet.getVersion())
+                && Objects.equals(getVersionHash(), tablet.getVersionHash())
+                && Objects.equals(getSchemaHash(), tablet.getSchemaHash());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(routings, version, versionHash, schemaHash);
+        return Objects.hash(getRoutings(), getVersion(), getVersionHash(), getSchemaHash());
+    }
+
+    public List<String> getRoutings() {
+        return routings;
+    }
+
+    public void setRoutings(List<String> routings) {
+        this.routings = routings;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
+    public Long getVersionHash() {
+        return versionHash;
+    }
+
+    public void setVersionHash(Long versionHash) {
+        this.versionHash = versionHash;
+    }
+
+    public Long getSchemaHash() {
+        return schemaHash;
+    }
+
+    public void setSchemaHash(Long schemaHash) {
+        this.schemaHash = schemaHash;
     }
 }

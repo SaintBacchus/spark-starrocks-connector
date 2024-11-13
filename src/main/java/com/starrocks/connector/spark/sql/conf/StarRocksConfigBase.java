@@ -19,6 +19,7 @@
 
 package com.starrocks.connector.spark.sql.conf;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +61,8 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
     // data type mapping instead of all columns
     public static final String KEY_COLUMN_TYPES = PREFIX + "column.types";
 
+    public static final String KEY_VERBOSE_ENABLED = PREFIX + "verbose.enabled";
+
     protected final Map<String, String> originOptions;
 
     private String[] feHttpUrls;
@@ -88,13 +91,10 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
         this.username = get(KEY_USERNAME);
         this.password = get(KEY_PASSWORD);
         String identifier = get(KEY_TABLE_IDENTIFIER);
-        try {
-            String[] parsedResult = parseIdentifier(identifier, LOG);
+        if (StringUtils.isNotEmpty(identifier)) {
+            String[] parsedResult = parseIdentifier(identifier);
             this.database = parsedResult[0];
             this.table = parsedResult[1];
-        } catch (Exception e) {
-            LOG.error("Failed to parse table identifier: {}", identifier, e);
-            throw new RuntimeException(e);
         }
         this.columns = getArray(KEY_COLUMNS, null);
         this.columnTypes = get(KEY_COLUMN_TYPES);
@@ -142,17 +142,17 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
     }
 
     @Override
-    public int getHttpRequestRetries() {
+    public Integer getHttpRequestRetries() {
         return httpRequestRetries;
     }
 
     @Override
-    public int getHttpRequestConnectTimeoutMs() {
+    public Integer getHttpRequestConnectTimeoutMs() {
         return httpRequestConnectTimeoutMs;
     }
 
     @Override
-    public int getHttpRequestSocketTimeoutMs() {
+    public Integer getHttpRequestSocketTimeoutMs() {
         return httpRequestSocketTimeoutMs;
     }
 
@@ -173,6 +173,11 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
         return columnTypes;
     }
 
+    @Override
+    public boolean isVerbose() {
+        return getBoolean(KEY_VERBOSE_ENABLED, false);
+    }
+
     protected String get(final String key) {
         return get(key, null);
     }
@@ -186,9 +191,9 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
         String value = get(key);
         if (value == null) {
             return defaultValue;
-        } else if (value.equalsIgnoreCase("true")) {
+        } else if ("true".equalsIgnoreCase(value)) {
             return true;
-        } else if (value.equalsIgnoreCase("false")) {
+        } else if ("false".equalsIgnoreCase(value)) {
             return false;
         } else {
             throw new RuntimeException(value + " is not a boolean string");
@@ -221,4 +226,5 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
                 ? defaultValue
                 : Arrays.stream(value.split(",")).map(String::trim).toArray(String[]::new);
     }
+
 }

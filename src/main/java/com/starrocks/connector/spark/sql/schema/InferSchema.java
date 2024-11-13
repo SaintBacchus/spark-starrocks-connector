@@ -19,10 +19,11 @@
 
 package com.starrocks.connector.spark.sql.schema;
 
-import com.starrocks.connector.spark.exception.StarrocksException;
+import com.starrocks.connector.spark.exception.StarRocksException;
 import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
 import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
+import com.starrocks.connector.spark.util.DataTypeUtils;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
@@ -32,15 +33,17 @@ import org.apache.spark.sql.types.StructType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public final class InferSchema {
 
     public static StructType inferSchema(Map<String, String> options) {
         SimpleStarRocksConfig config = new SimpleStarRocksConfig(options);
-        StarRocksSchema starocksSchema = StarRocksConnector.getSchema(config);
-        return inferSchema(starocksSchema, config);
+        StarRocksConnector srConnector = new StarRocksConnector(
+                config.getFeJdbcUrl(), config.getUsername(), config.getPassword());
+        StarRocksSchema starrocksSchema = srConnector.getSchema(
+                new TableIdentifier(config.getDatabase(), config.getTable()));
+        return inferSchema(starrocksSchema, config);
     }
 
     public static StructType inferSchema(StarRocksSchema starRocksSchema, StarRocksConfig config) {
@@ -59,9 +62,10 @@ public final class InferSchema {
                 starRocksFields.add(field);
             }
             if (!nonExistedColumns.isEmpty()) {
-                throw new StarrocksException(
+                throw new StarRocksException(
                         String.format("Can't find those columns %s in StarRocks table `%s`.`%s`. " +
-                                "Please check your configuration 'starrocks.columns' to make sure all columns exist in the table",
+                                        "Please check your configuration 'starrocks.columns' " +
+                                        "to make sure all columns exist in the table",
                                 nonExistedColumns, config.getDatabase(), config.getTable()));
             }
         }
@@ -81,7 +85,7 @@ public final class InferSchema {
 
     static Map<String, StructField> parseCustomTypes(String columnTypes) {
         if (columnTypes == null) {
-            return new HashMap<>();
+            return new HashMap<>(0);
         }
 
         Map<String, StructField> customTypes = new HashMap<>();
@@ -93,43 +97,12 @@ public final class InferSchema {
     }
 
     static StructField inferStructField(StarRocksField field) {
-        DataType dataType = inferDataType(field);
+        if (null == field || null == field.getType()) {
+            throw new IllegalArgumentException("Invalid starrocks field: " + field);
+        }
 
+        DataType dataType = DataTypeUtils.toSparkDataType(field.getType());
         return new StructField(field.getName(), dataType, true, Metadata.empty());
     }
-    static DataType inferDataType(StarRocksField field) {
-        String type = field.getType().toLowerCase(Locale.ROOT);
-        switch (type) {
-            case "tinyint":
-                // mysql does not have boolean type, and starrocks `information_schema`.`COLUMNS` will return
-                // a "tinyint" data type for both StarRocks BOOLEAN and TINYINT type, We distinguish them by
-                // column size, and the size of BOOLEAN is null
-                return field.getSize() == null ? DataTypes.BooleanType : DataTypes.ByteType;
-            case "smallint":
-                return DataTypes.ShortType;
-            case "int":
-                return DataTypes.IntegerType;
-            case "bigint":
-                return DataTypes.LongType;
-            case "bigint unsigned":
-                return DataTypes.StringType;
-            case "float":
-                return DataTypes.FloatType;
-            case "double":
-                return DataTypes.DoubleType;
-            case "decimal":
-                return DataTypes.createDecimalType(Integer.parseInt(field.getSize()), Integer.parseInt(field.getScale()));
-            case "char":
-            case "varchar":
-            case "json":
-                return DataTypes.StringType;
-            case "date":
-                return DataTypes.DateType;
-            case "datetime":
-                return DataTypes.TimestampType;
-            default:
-                throw new UnsupportedOperationException(String.format(
-                        "Unsupported starrocks type, column name: %s, data type: %s", field.getName(), field.getType()));
-        }
-    }
+
 }

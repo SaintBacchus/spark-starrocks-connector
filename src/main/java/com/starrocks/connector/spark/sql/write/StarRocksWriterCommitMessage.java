@@ -20,10 +20,11 @@
 package com.starrocks.connector.spark.sql.write;
 
 import com.starrocks.data.load.stream.StreamLoadSnapshot;
-
+import com.starrocks.format.rest.model.TabletCommitInfo;
 import org.apache.spark.sql.connector.write.WriterCommitMessage;
 
 import java.util.Objects;
+import java.util.StringJoiner;
 
 public class StarRocksWriterCommitMessage implements WriterCommitMessage {
 
@@ -31,16 +32,40 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
     private final long taskId;
     private final long epochId;
 
+    private final String label;
+    private final Long txnId;
+
     private final StreamLoadSnapshot snapshot;
+
+    private final TabletCommitInfo tabletCommitInfo;
+
+    public StarRocksWriterCommitMessage(int partitionId, long taskId, long epochId) {
+        this(partitionId, taskId, epochId, null, null);
+    }
 
     public StarRocksWriterCommitMessage(int partitionId,
                                         long taskId,
                                         long epochId,
-                                        StreamLoadSnapshot snapshot) {
+                                        String label,
+                                        Long txnId) {
+        this(partitionId, taskId, epochId, label, txnId, null, null);
+    }
+
+    public StarRocksWriterCommitMessage(int partitionId,
+                                        long taskId,
+                                        long epochId,
+                                        String label,
+                                        Long txnId,
+                                        StreamLoadSnapshot snapshot,
+                                        TabletCommitInfo tabletCommitInfo) {
         this.partitionId = partitionId;
         this.taskId = taskId;
         this.epochId = epochId;
+        this.label = label;
+        this.txnId = txnId;
+
         this.snapshot = snapshot;
+        this.tabletCommitInfo = tabletCommitInfo;
     }
 
     public int getPartitionId() {
@@ -55,29 +80,57 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
         return epochId;
     }
 
+    public String getLabel() {
+        return label;
+    }
+
+    public Long getTxnId() {
+        return txnId;
+    }
+
     public StreamLoadSnapshot getSnapshot() {
         return snapshot;
     }
 
+    public TabletCommitInfo getTabletCommitInfo() {
+        return tabletCommitInfo;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         StarRocksWriterCommitMessage that = (StarRocksWriterCommitMessage) o;
-        return partitionId == that.partitionId && taskId == that.taskId && epochId == that.epochId;
+        return getPartitionId() == that.getPartitionId()
+                && getTaskId() == that.getTaskId()
+                && getEpochId() == that.getEpochId()
+                && Objects.equals(getLabel(), that.getLabel())
+                && Objects.equals(getTxnId(), that.getTxnId())
+                && Objects.equals(getSnapshot(), that.getSnapshot())
+                && Objects.equals(getTabletCommitInfo(), that.getTabletCommitInfo());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(partitionId, taskId, epochId);
+        return Objects.hash(
+                getPartitionId(), getTaskId(), getEpochId(), getLabel(), getTxnId(), getSnapshot(), getTabletCommitInfo()
+        );
     }
 
     @Override
     public String toString() {
-        return "StarRocksWriterCommitMessage{" +
-                "partitionId=" + partitionId +
-                ", taskId=" + taskId +
-                ", epochId=" + epochId +
-                '}';
+        return new StringJoiner(", ", "[", "]")
+                .add("partitionId=" + partitionId)
+                .add("taskId=" + taskId)
+                .add("epochId=" + epochId)
+                .add("label='" + label + "'")
+                .add("txnId=" + txnId)
+                .add("snapshot=" + snapshot)
+                .add("tabletCommitInfo=" + tabletCommitInfo)
+                .toString();
     }
 }

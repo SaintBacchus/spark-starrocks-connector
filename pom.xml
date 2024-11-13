@@ -54,14 +54,14 @@
 
     <groupId>com.starrocks</groupId>
     <artifactId>starrocks-spark-connector-${env.SPARK_FEATURE_VERSION}_${env.STARROCKS_SCALA_VERSION}</artifactId>
-    <version>1.1.2</version>
+    <version>1.1.2-ve-bypass-4</version>
 
     <properties>
         <sr_scala.version>${env.STARROCKS_SCALA_VERSION}</sr_scala.version>
         <sr_spark.version>${env.STARROCKS_SPARK_VERSION}</sr_spark.version>
         <scala-lang.version>2.12.10</scala-lang.version>
         <libthrift.version>0.14.0</libthrift.version>
-        <arrow.version>5.0.0</arrow.version>
+        <arrow.version>15.0.2</arrow.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <fasterxml.version>2.12.0</fasterxml.version>
         <slf4j.version>1.7.32</slf4j.version>
@@ -69,6 +69,8 @@
         <httpclient.version>4.5.13</httpclient.version>
         <httpcore.version>4.4.15</httpcore.version>
         <fastjson.version>1.2.83</fastjson.version>
+        <starrocks.streamload.version>1.2.9-ve-3</starrocks.streamload.version>
+        <starrocks.format.sdk.version>1.0.0.45</starrocks.format.sdk.version>
     </properties>
 
     <profiles>
@@ -165,6 +167,21 @@
                     <version>${log4j.version}</version>
                     <scope>provided</scope>
                 </dependency>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-hive_${env.STARROCKS_SCALA_VERSION}</artifactId>
+                    <version>${env.STARROCKS_SPARK_VERSION}</version>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.apache.hadoop</groupId>
+                            <artifactId>hadoop-client-api</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.hadoop</groupId>
+                            <artifactId>hadoop-client-runtime</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
             </dependencies>
         </profile>
 
@@ -228,6 +245,16 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.starrocks</groupId>
+            <artifactId>starrocks-format-sdk</artifactId>
+            <version>${starrocks.format.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.roaringbitmap</groupId>
+            <artifactId>RoaringBitmap</artifactId>
+            <version>0.8.13</version>
+        </dependency>
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>4.1.87.Final</version>
@@ -236,7 +263,7 @@
         <dependency>
             <groupId>com.starrocks</groupId>
             <artifactId>starrocks-stream-load-sdk</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <version>${starrocks.streamload.version}</version>
         </dependency>
         <dependency>
             <groupId>org.scala-lang</groupId>
@@ -310,6 +337,12 @@
 
         <!--Test-->
         <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>5.4.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <version>5.1.49</version>
@@ -331,18 +364,6 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-scala_${sr_scala.version}</artifactId>
             <version>1.6.2</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>hamcrest-core</artifactId>
-                    <groupId>org.hamcrest</groupId>
-                </exclusion>
-            </exclusions>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.11</version>
             <exclusions>
                 <exclusion>
                     <artifactId>hamcrest-core</artifactId>
@@ -461,9 +482,9 @@
                     <numUnapprovedLicenses>0</numUnapprovedLicenses>
                     <licenses>
                         <license implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
-                            <licenseFamilyCategory>AL2 </licenseFamilyCategory>
+                            <licenseFamilyCategory>AL2</licenseFamilyCategory>
                             <licenseFamilyName>Apache License 2.0</licenseFamilyName>
-                            <notes />
+                            <notes/>
                             <patterns>
                                 <pattern>Licensed to the Apache Software Foundation (ASF) under one</pattern>
                             </patterns>
@@ -478,9 +499,9 @@
                         <exclude>src/test/resources/data/**</exclude>
                         <exclude>**/target/**</exclude>
                         <exclude>**/*.md</exclude>
-<!--                        <exclude>README.md</exclude>-->
-<!--                        <exclude>CODE_OF_CONDUCT.md</exclude>-->
-<!--                        <exclude>CONTRIBUTING.md</exclude>-->
+                        <!--                        <exclude>README.md</exclude>-->
+                        <!--                        <exclude>CODE_OF_CONDUCT.md</exclude>-->
+                        <!--                        <exclude>CONTRIBUTING.md</exclude>-->
                         <exclude>.github/**</exclude>
                     </excludes>
                 </configuration>
@@ -539,7 +560,9 @@
                 </executions>
                 <configuration>
                     <generateGitPropertiesFile>true</generateGitPropertiesFile>
-                    <generateGitPropertiesFilename>${project.build.outputDirectory}/starrocks-spark-connector-git.properties</generateGitPropertiesFilename>
+                    <generateGitPropertiesFilename>
+                        ${project.build.outputDirectory}/starrocks-spark-connector-git.properties
+                    </generateGitPropertiesFilename>
                     <failOnNoGitDirectory>false</failOnNoGitDirectory>
                     <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
                     <includeOnlyProperties>
@@ -580,7 +603,7 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
+            <!--<plugin>
                 <groupId>org.sonatype.plugins</groupId>
                 <artifactId>nexus-staging-maven-plugin</artifactId>
                 <version>1.6.7</version>
@@ -590,8 +613,8 @@
                     <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
                     <autoReleaseAfterClose>true</autoReleaseAfterClose>
                 </configuration>
-            </plugin>
-            <plugin>
+            </plugin>-->
+            <!--<plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-gpg-plugin</artifactId>
                 <version>1.5</version>
@@ -604,11 +627,39 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>-->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.1.1</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>8.40</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>dev/checkstyle.xml</configLocation>
+                    <encoding>UTF-8</encoding>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                    <linkXRef>false</linkXRef>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>validate</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
 
-    <repositories>
+    <!--<repositories>
         <repository>
             <id>oss.sonatype.org-snapshot</id>
             <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
@@ -619,28 +670,36 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
-    </repositories>
+    </repositories>-->
 
     <distributionManagement>
-         <snapshotRepository>
-             <id>ossrh</id>
-             <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-         </snapshotRepository>
-         <repository>
-             <id>ossrh</id>
-             <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-         </repository>
-     </distributionManagement>
-     <reporting>
-         <plugins>
-             <plugin>
-                 <groupId>org.apache.maven.plugins</groupId>
-                 <artifactId>maven-checkstyle-plugin</artifactId>
-                 <version>3.1.0</version>
-                 <configuration>
-                     <configLocation>checkstyle.xml</configLocation>
-                 </configuration>
-             </plugin>
-         </plugins>
-     </reporting>
+        <!--<snapshotRepository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>-->
+        <snapshotRepository>
+            <id>bytedance-repo</id>
+            <url>https://maven.byted.org/repository/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>bytedance-repo</id>
+            <url>https://maven.byted.org/repository/releases</url>
+        </repository>
+    </distributionManagement>
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.1.1</version>
+                <configuration>
+                    <configLocation>dev/checkstyle.xml</configLocation>
+                </configuration>
+            </plugin>
+        </plugins>
+    </reporting>
 </project>

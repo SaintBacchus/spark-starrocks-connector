@@ -31,18 +31,31 @@ public interface StarRocksConfig extends Serializable {
     Map<String, String> getOriginOptions();
 
     String[] getFeHttpUrls();
+
     String getFeJdbcUrl();
+
     String getDatabase();
+
     String getTable();
+
     String getUsername();
+
     String getPassword();
-    int getHttpRequestRetries();
-    int getHttpRequestConnectTimeoutMs();
-    int getHttpRequestSocketTimeoutMs();
+
+    Integer getHttpRequestRetries();
+
+    Integer getHttpRequestConnectTimeoutMs();
+
+    Integer getHttpRequestSocketTimeoutMs();
+
     ZoneId getTimeZone();
 
     @Nullable
     String[] getColumns();
+
     @Nullable
     String getColumnTypes();
+
+    boolean isVerbose();
+
 }

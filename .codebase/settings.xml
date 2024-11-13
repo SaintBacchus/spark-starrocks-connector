@@ -1,0 +1,35 @@
+<settings>
+<profiles>
+  <profile>
+    <id>bytedance-repos</id>
+    <repositories>
+       <repository>
+           <id>bytedance-snapshots</id>
+           <url>https://maven.byted.org/repository/snapshots</url>
+       </repository>
+       <repository>
+           <id>bytedance-releases</id>
+           <url>https://maven.byted.org/repository/releases</url>
+       </repository>
+   </repositories>
+   <!--  插件拉取地址  -->
+ <pluginRepositories>
+   <pluginRepository>
+       <id>bytedance-repo</id>
+       <url>https://maven.byted.org/repository/public</url>
+   </pluginRepository>
+ </pluginRepositories>
+  </profile>
+</profiles>
+
+<activeProfiles>
+  <activeProfile>bytedance-repos</activeProfile>
+</activeProfiles>
+ <mirrors>
+   <mirror>
+     <id>bytedance-mirror</id>
+     <mirrorOf>*</mirrorOf>
+     <url>https://maven.byted.org/repository/public</url>
+   </mirror>
+ </mirrors>
+</settings>

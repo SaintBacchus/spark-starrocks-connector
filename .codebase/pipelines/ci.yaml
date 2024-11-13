@@ -1,0 +1,17 @@
+name: StarRocks Spark Connector CI
+trigger:
+  change:
+    types:
+      - submit
+      - create
+      - push
+jobs:
+  CodeStyle-CI:
+    image: hub.byted.org/compile/emr-starrocks-lh-3.1-builder:412c9075707bcf65af9f7f7a8f53f506
+    working-directory: emr/starrocks-spark-connector
+    steps:
+      - name: CheckStyle
+        commands:
+          - mkdir -p ~/.m2/
+          - cp .codebase/settings.xml ~/.m2/
+          - mvn clean validate -Pspark-3.3

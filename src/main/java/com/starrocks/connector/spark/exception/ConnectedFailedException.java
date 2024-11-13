@@ -19,12 +19,14 @@
 
 package com.starrocks.connector.spark.exception;
 
-public class ConnectedFailedException extends StarrocksException {
+public class ConnectedFailedException extends StarRocksException {
+
     public ConnectedFailedException(String server, Throwable cause) {
-        super("Connect to " + server + "failed.", cause);
+        super("Connect to " + server + " failed.", cause);
     }
 
-    public ConnectedFailedException(String server, String status, String entity,  Throwable cause) {
+    public ConnectedFailedException(String server, String status, String entity, Throwable cause) {
         super(String.format("Connect to %s failed, status: %s, response entity: %s.", server, status, entity), cause);
     }
+
 }

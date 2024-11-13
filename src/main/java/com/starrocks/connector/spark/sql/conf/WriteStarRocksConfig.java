@@ -26,6 +26,7 @@ import com.starrocks.data.load.stream.StreamLoadDataFormat;
 import com.starrocks.data.load.stream.StreamLoadUtils;
 import com.starrocks.data.load.stream.properties.StreamLoadProperties;
 import com.starrocks.data.load.stream.properties.StreamLoadTableProperties;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ByteType;
 import org.apache.spark.sql.types.DataType;
@@ -59,7 +60,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     private static final String KEY_ENABLE_TRANSACTION = WRITE_PREFIX + "enable.transaction-stream-load";
     // The memory size used to buffer the rows before loading the data to StarRocks.
     // This can improve the performance for writing to starrocks.
-    private static final String KEY_BUFFER_SIZE = WRITE_PREFIX + "buffer.size";
+    public static final String KEY_BUFFER_SIZE = WRITE_PREFIX + "buffer.size";
     // The number of rows buffered before sending to StarRocks.
     private static final String KEY_BUFFER_ROWS = WRITE_PREFIX + "buffer.rows";
     // Flush interval of the row batch in millisecond
@@ -73,6 +74,12 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
 
     private static final String KEY_NUM_PARTITIONS = WRITE_PREFIX + "num.partitions";
     private static final String KEY_PARTITION_COLUMNS = WRITE_PREFIX + "partition.columns";
+
+    public static final String KEY_WRITER_MODE = PREFIX + "writer.mode";
+
+    private static final String KEY_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER =
+            WRITE_PREFIX + "enable.remove-duplicated-content-length-header";
+    private static final boolean DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER = true;
 
     private String labelPrefix = "spark";
     private int waitForContinueTimeoutMs = 30000;
@@ -101,14 +108,21 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     private String streamLoadColumnProperty;
     private String[] streamLoadColumnNames;
 
-    public WriteStarRocksConfig(Map<String, String> originOptions, StructType sparkSchema, StarRocksSchema starRocksSchema) {
+    private String writerMode;
+
+    private boolean enableRemoveDuplicatedContentLengthHeader
+            = DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER;
+
+    public WriteStarRocksConfig(Map<String, String> originOptions,
+                                StructType sparkSchema,
+                                StarRocksSchema starRocksSchema) {
         super(originOptions);
         load(sparkSchema);
         genStreamLoadColumns(sparkSchema, starRocksSchema);
     }
 
     private void load(StructType sparkSchema) {
-        labelPrefix = get(KEY_LABEL_PREFIX, "spark");
+        labelPrefix = getLabelPrefix();
         waitForContinueTimeoutMs = getInt(KEY_WAIT_FOR_CONTINUE_TIMEOUT, 30000);
         chunkLimit = Utils.byteStringAsBytes(get(KEY_CHUNK_LIMIT, "3g"));
         scanFrequencyInMs = getInt(KEY_SCAN_FREQUENCY, 50);
@@ -151,10 +165,18 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
             properties.put("timeout", String.valueOf(timeout));
         }
 
+        if (!properties.containsKey("timezone")) {
+            properties.put("timezone", getTimeZone().getId());
+        }
+
         numPartitions = getInt(KEY_NUM_PARTITIONS, 0);
         partitionColumns = getArray(KEY_PARTITION_COLUMNS, null);
         supportTransactionStreamLoad = StreamLoadUtils.isStarRocksSupportTransactionLoad(
                 Arrays.asList(getFeHttpUrls()), getHttpRequestConnectTimeoutMs(), getUsername(), getPassword());
+        writerMode = get(KEY_WRITER_MODE, WriteMode.STREAM_LOAD.name());
+        enableRemoveDuplicatedContentLengthHeader = getBoolean(
+                KEY_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER,
+                DEFAULT_ENABLE_REMOVE_DUPLICATED_CONTENT_LENGTH_HEADER);
     }
 
     private void genStreamLoadColumns(StructType sparkSchema, StarRocksSchema starRocksSchema) {
@@ -202,13 +224,17 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     private String getBitmapFunction(StructField field) {
         DataType dataType = field.dataType();
         if (dataType instanceof ByteType
-            || dataType instanceof ShortType
-            || dataType instanceof IntegerType
-            || dataType instanceof LongType) {
+                || dataType instanceof ShortType
+                || dataType instanceof IntegerType
+                || dataType instanceof LongType) {
             return "to_bitmap";
         } else {
             return "bitmap_hash";
         }
+    }
+
+    public String getLabelPrefix() {
+        return get(KEY_LABEL_PREFIX, isBypassWrite() ? "spark_bypass" : "spark");
     }
 
     public String getFormat() {
@@ -232,8 +258,23 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     }
 
     public boolean isPartialUpdate() {
-        String val = properties.get("partial_update");
-        return val != null && val.equalsIgnoreCase("true");
+        return BooleanUtils.isTrue(BooleanUtils.toBoolean(properties.get("partial_update")));
+    }
+
+    public boolean isBypassWrite() {
+        return WriteMode.BYPASS.is(this.writerMode);
+    }
+
+    public boolean notBypassWrite() {
+        return !isBypassWrite();
+    }
+
+    public boolean isStreamLoadWrite() {
+        return WriteMode.STREAM_LOAD.is(this.writerMode);
+    }
+
+    public boolean notStreamLoadWrite() {
+        return !isStreamLoadWrite();
     }
 
     public StreamLoadProperties toStreamLoadProperties() {
@@ -258,6 +299,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
                 .connectTimeout(getHttpRequestConnectTimeoutMs())
                 .waitForContinueTimeoutMs(waitForContinueTimeoutMs)
                 .ioThreadCount(ioThreadCount)
+                .setRemoveDuplicatedContentLengthHeader(enableRemoveDuplicatedContentLengthHeader)
                 .scanningFrequency(scanFrequencyInMs)
                 .cacheMaxBytes(bufferSize)
                 .expectDelayTime(flushInterval)
@@ -271,5 +313,29 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
         }
 
         return builder.build();
+    }
+
+    public enum WriteMode {
+
+        STREAM_LOAD(0),
+        BYPASS(1);
+
+        private final int id;
+
+        WriteMode(int id) {
+            this.id = id;
+        }
+
+        public boolean is(String mode) {
+            return this.name().equalsIgnoreCase(mode);
+        }
+
+        public boolean not(String mode) {
+            return !is(mode);
+        }
+
+        public int getId() {
+            return id;
+        }
     }
 }

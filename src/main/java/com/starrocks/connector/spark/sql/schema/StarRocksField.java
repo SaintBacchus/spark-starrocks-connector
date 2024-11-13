@@ -19,29 +19,74 @@
 
 package com.starrocks.connector.spark.sql.schema;
 
-public class StarRocksField {
+import com.starrocks.connector.spark.DataType;
+import com.starrocks.format.rest.model.Column;
 
-    public static final StarRocksField __OP = new StarRocksField("__op", "tinyint", Integer.MAX_VALUE, "3", null);
+import java.io.Serializable;
+import java.util.StringJoiner;
 
-    private String name;
-    private String type;
-    private int ordinalPosition;
-    private String size;
-    private String scale;
 
-    public StarRocksField(String name, String type, int ordinalPosition, String size, String scale) {
+public class StarRocksField implements Serializable {
+
+    private static final long serialVersionUID = -3617841413720459202L;
+
+    public static final StarRocksField OP = new StarRocksField(
+            "__op",
+            new Column.Type() {
+
+                private static final long serialVersionUID = -2875972354443981275L;
+
+                {
+                    setName(DataType.TINYINT.name());
+                    setTypeSize(3);
+                }
+            },
+            Integer.MAX_VALUE,
+            true
+    );
+
+    private final String name;
+    private final Column.Type type;
+    private final int ordinalPosition;
+    private final boolean nullable;
+
+    public StarRocksField(String name, Column.Type type) {
+        this(name, type, -1, true);
+    }
+
+    public StarRocksField(String name,
+                          Column.Type type,
+                          int ordinalPosition,
+                          boolean nullable) {
         this.name = name;
         this.type = type;
         this.ordinalPosition = ordinalPosition;
-        this.size = size;
-        this.scale = scale;
+        this.nullable = nullable;
+    }
+
+    public boolean isBitmap() {
+        return "bitmap".equalsIgnoreCase(getType().getName());
+    }
+
+    public boolean isHll() {
+        return "hll".equalsIgnoreCase(getType().getName());
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", "[", "]")
+                .add("name='" + name + "'")
+                .add("type=" + type)
+                .add("ordinalPosition=" + ordinalPosition)
+                .add("nullable=" + nullable)
+                .toString();
     }
 
     public String getName() {
         return name;
     }
 
-    public String getType() {
+    public Column.Type getType() {
         return type;
     }
 
@@ -49,19 +94,8 @@ public class StarRocksField {
         return ordinalPosition;
     }
 
-    public String getSize() {
-        return size;
+    public boolean isNullable() {
+        return nullable;
     }
 
-    public String getScale() {
-        return scale;
-    }
-
-    public boolean isBitmap() {
-        return "bitmap".equalsIgnoreCase(type);
-    }
-
-    public boolean isHll() {
-        return "hll".equalsIgnoreCase(type);
-    }
 }

@@ -57,7 +57,8 @@ else
     exit 1
 fi
 
-${MVN_CMD} clean deploy -DskipTests -Pspark-${spark_version}
+# mvn clean package -U -Pspark-3.5 -Drat.skip=true -DskipTests
+${MVN_CMD} clean package -Pspark-${spark_version} -Dmaven.javadoc.skip=true -Drat.skip=true -DskipTests
 
 echo "*********************************************************************"
 echo "Successfully deploy Spark StarRocks Connector for Spark $spark_version"

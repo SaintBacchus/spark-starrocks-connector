@@ -1,0 +1,9 @@
+starrocks.fe.http.url=10.37.80.244:8030
+starrocks.fe.jdbc.url=jdbc:mysql://10.37.80.244:9030
+starrocks.user=root
+starrocks.password=
+
+starrocks.fs.s3.endpoint=https://tos-s3-cn-beijing.ivolces.com
+starrocks.fs.s3.region=cn-beijing
+starrocks.fs.s3.accessKey=
+starrocks.fs.s3.secretKey=

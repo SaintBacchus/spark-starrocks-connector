@@ -19,13 +19,18 @@
 
 package com.starrocks.connector.spark.rest.models;
 
+import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig;
+
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public class Schema {
+public class Schema implements Serializable {
     private int status = 0;
     private List<Field> properties;
+    private EtlJobConfig.EtlTable etlTable;
+    private Long tableId;
 
     public Schema() {
         properties = new ArrayList<>();
@@ -51,8 +56,30 @@ public class Schema {
         this.properties = properties;
     }
 
-    public void put(String name, String type, String comment, int scale, int precision) {
-        properties.add(new Field(name, type, comment, scale, precision));
+    public EtlJobConfig.EtlTable getEtlTable() {
+        return etlTable;
+    }
+
+    public void setEtlTable(EtlJobConfig.EtlTable etlTable) {
+        this.etlTable = etlTable;
+    }
+
+    public void setTableId(Long tableId) {
+        this.tableId = tableId;
+    }
+
+    public Long getTableId() {
+        return tableId;
+    }
+
+    public void put(String name,
+                    String type,
+                    Integer columnSize,
+                    String comment,
+                    Integer scale,
+                    Integer precision,
+                    boolean isKey) {
+        properties.add(new Field(name, type, columnSize, comment, scale, precision, isKey));
     }
 
     public void put(Field f) {

@@ -1,0 +1,45 @@
+CREATE TABLE IF NOT EXISTS `%s`.`%s`
+(
+    id                  BIGINT,
+    boolean_value1      BOOLEAN REPLACE,
+    boolean_value2      BOOLEAN REPLACE,
+    boolean_null_value  BOOLEAN REPLACE,
+    tinyint_value       TINYINT MAX,
+    tinyint_null_value  TINYINT MAX,
+    smallint_value      SMALLINT MIN,
+    smallint_null_value SMALLINT MIN,
+    int_value           INT SUM,
+    int_null_value      INT SUM,
+    bigint_value        BIGINT MAX,
+    bigint_null_value   BIGINT MAX,
+    largeint_lower      LARGEINT MAX,
+    largeint_upper      LARGEINT MAX,
+    largeint_null_value LARGEINT MAX,
+    float_value         FLOAT REPLACE,
+    float_null_value    FLOAT REPLACE,
+    double_value        DOUBLE REPLACE,
+    double_null_value   DOUBLE REPLACE,
+    decimal_value1      DECIMAL(20, 10) REPLACE,
+    decimal_value2      DECIMAL(32, 10) REPLACE,
+    decimal_value3      DECIMAL(10, 6) REPLACE,
+    decimal_null_value3 DECIMAL(10, 6) REPLACE,
+    char_value1         CHAR(16) REPLACE,
+    char_value2         CHAR(32) REPLACE,
+    char_null_value     CHAR(32) REPLACE,
+    varchar_value1      CHAR(16) REPLACE,
+    varchar_value2      CHAR(32) REPLACE,
+    varchar_null_value  CHAR(32) REPLACE,
+    string_value        STRING REPLACE,
+    string_null_value   STRING REPLACE,
+    date_value          DATE REPLACE,
+    date_null_value     DATE REPLACE,
+    datetime_value      DATETIME REPLACE,
+    datetime_null_value DATETIME REPLACE,
+    json_object_value   JSON REPLACE,
+    json_array_value    JSON REPLACE,
+    json_null_value     JSON REPLACE
+) ENGINE = OLAP AGGREGATE KEY (id)
+DISTRIBUTED BY HASH(id) BUCKETS 4
+PROPERTIES(
+    "replication_num" = "1"
+);
